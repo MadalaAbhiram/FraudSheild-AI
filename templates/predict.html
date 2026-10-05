@@ -1,0 +1,367 @@
+{% extends "base.html" %}
+{% block title %}Predictions — {{ filename }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4" style="margin-top:64px;">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+    <div>
+      <h3 class="mb-0 fw-bold">
+        <i class="fa-solid fa-magnifying-glass-chart text-success me-2"></i>Fraud Predictions
+      </h3>
+      <p class="text-muted mb-0"><i class="fa-solid fa-file-csv me-1"></i>{{ filename }}</p>
+    </div>
+    <a href="{{ url_for('model_page', filename=filename) }}" class="btn btn-outline-warning btn-sm">
+      <i class="fa-solid fa-brain me-1"></i>Back to Models
+    </a>
+  </div>
+
+  {% if not model_ready %}
+  <div class="alert alert-warning d-flex align-items-center gap-3">
+    <i class="fa-solid fa-triangle-exclamation fa-2x"></i>
+    <div>
+      <div class="fw-bold">No trained model found</div>
+      <div>Please <a href="{{ url_for('model_page', filename=filename) }}" class="alert-link">train a model</a>
+           before running predictions.</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs mb-4" id="predictTabs" role="tablist">
+    <li class="nav-item">
+      <button class="nav-link active" id="batch-tab" data-bs-toggle="tab"
+              data-bs-target="#batch-pane" type="button">
+        <i class="fa-solid fa-table me-2"></i>Batch Prediction
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="single-tab" data-bs-toggle="tab"
+              data-bs-target="#single-pane" type="button">
+        <i class="fa-solid fa-circle-dot me-2"></i>Single Transaction
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- ======== BATCH TAB ============================================== -->
+    <div class="tab-pane fade show active" id="batch-pane">
+
+      <!-- File selector — train or test -->
+      {% if test_file and test_file != filename %}
+      <div class="card border-0 mb-3">
+        <div class="card-body py-3 d-flex align-items-center gap-3 flex-wrap">
+          <span class="fw-semibold small text-muted">Predict on:</span>
+          <div class="btn-group btn-group-sm" role="group">
+            <input type="radio" class="btn-check" name="predTarget" id="useTrain"
+                   value="{{ train_file }}" {% if filename == train_file %}checked{% endif %} autocomplete="off">
+            <label class="btn btn-outline-warning" for="useTrain">
+              <i class="fa-solid fa-graduation-cap me-1"></i>{{ train_file }}
+              <span class="badge bg-warning text-dark ms-1">Train</span>
+            </label>
+
+            <input type="radio" class="btn-check" name="predTarget" id="useTest"
+                   value="{{ test_file }}" {% if filename == test_file %}checked{% endif %} autocomplete="off">
+            <label class="btn btn-outline-info" for="useTest">
+              <i class="fa-solid fa-flask me-1"></i>{{ test_file }}
+              <span class="badge bg-info text-dark ms-1">Test</span>
+            </label>
+          </div>
+          <small class="text-muted">Both files are available. The test file is ideal for predictions after training on the train file.</small>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Run button -->
+      <div class="card border-0 mb-4">
+        <div class="card-body d-flex align-items-center gap-4 flex-wrap">
+          <div>
+            <h6 class="fw-bold mb-1">Run Batch Prediction</h6>
+            <p class="text-muted small mb-0">Classify all transactions in the selected file</p>
+          </div>
+          <button class="btn btn-success btn-lg ms-auto" id="runBatchBtn"
+                  onclick="runBatchPrediction()" {% if not model_ready %}disabled{% endif %}>
+            <span class="spinner-border spinner-border-sm me-2 d-none" id="batchSpinner"></span>
+            <i class="fa-solid fa-play me-2" id="batchIcon"></i>Run Predictions
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="row g-3 mb-4 d-none" id="summaryCards">
+        <div class="col-sm-6 col-xl-3">
+          <div class="stat-card card border-0 p-3 text-center">
+            <div class="stat-card-icon text-info"><i class="fa-solid fa-list-ol fa-2x"></i></div>
+            <div class="display-6 fw-bold mt-2" id="statTotal">—</div>
+            <div class="text-muted small">Total Transactions</div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+          <div class="stat-card card border-0 p-3 text-center">
+            <div class="stat-card-icon text-danger"><i class="fa-solid fa-triangle-exclamation fa-2x"></i></div>
+            <div class="display-6 fw-bold mt-2 text-danger" id="statFraud">—</div>
+            <div class="text-muted small">Fraud Detected</div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+          <div class="stat-card card border-0 p-3 text-center">
+            <div class="stat-card-icon text-success"><i class="fa-solid fa-circle-check fa-2x"></i></div>
+            <div class="display-6 fw-bold mt-2 text-success" id="statLegit">—</div>
+            <div class="text-muted small">Legitimate</div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+          <div class="stat-card card border-0 p-3 text-center">
+            <div class="stat-card-icon text-warning"><i class="fa-solid fa-dollar-sign fa-2x"></i></div>
+            <div class="display-6 fw-bold mt-2 text-warning" id="statAtRisk">—</div>
+            <div class="text-muted small">Amount at Risk ($)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results preview table -->
+      <div class="card border-0 d-none" id="resultsTableCard">
+        <div class="card-header d-flex align-items-center py-2">
+          <h6 class="mb-0"><i class="fa-solid fa-table me-2"></i>Results Preview (first 100 rows)</h6>
+          <div class="ms-auto d-flex gap-2">
+            <a href="#" class="btn btn-sm btn-outline-success" id="downloadBtn">
+              <i class="fa-solid fa-download me-1"></i>Download CSV
+            </a>
+            <a href="#" class="btn btn-sm btn-outline-info" id="viewResultsBtn">
+              <i class="fa-solid fa-chart-pie me-1"></i>View Charts
+            </a>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive" style="max-height:400px;">
+            <table class="table table-sm table-hover mb-0 small" id="resultsTable">
+              <thead id="resultsTableHead"></thead>
+              <tbody id="resultsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div><!-- /batch pane -->
+
+    <!-- ======== SINGLE TAB ============================================= -->
+    <div class="tab-pane fade" id="single-pane">
+      <div class="row g-4">
+        <div class="col-lg-7">
+          <div class="card border-0">
+            <div class="card-header py-2">
+              <h6 class="mb-0"><i class="fa-solid fa-credit-card me-2"></i>Enter Transaction Details</h6>
+            </div>
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold">Amount ($)</label>
+                  <input type="number" class="form-control" id="s_amt" placeholder="e.g. 150.00"
+                         step="0.01" min="0" value="150" />
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold">Category</label>
+                  <select class="form-select" id="s_category">
+                    {% for cat in ['grocery_pos','entertainment','gas_transport','misc_net',
+                                   'shopping_net','shopping_pos','food_dining','personal_care',
+                                   'health_fitness','travel','kids_pets','home','misc_pos'] %}
+                    <option value="{{ cat }}">{{ cat }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold">Hour (0–23)</label>
+                  <input type="number" class="form-control" id="s_hour" min="0" max="23" value="14" />
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold">Day of Week (0=Mon)</label>
+                  <input type="number" class="form-control" id="s_dow" min="0" max="6" value="2" />
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold">Cardholder Lat</label>
+                  <input type="number" class="form-control" id="s_lat" step="0.0001" value="40.7128" />
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold">Cardholder Long</label>
+                  <input type="number" class="form-control" id="s_long" step="0.0001" value="-74.0060" />
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold">Merchant Lat</label>
+                  <input type="number" class="form-control" id="s_merch_lat" step="0.0001" value="40.7580" />
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold">Merchant Long</label>
+                  <input type="number" class="form-control" id="s_merch_long" step="0.0001" value="-73.9855" />
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold">Age</label>
+                  <input type="number" class="form-control" id="s_age" min="18" max="100" value="35" />
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label small fw-semibold">Gender</label>
+                  <select class="form-select" id="s_gender">
+                    <option value="F">Female</option>
+                    <option value="M">Male</option>
+                  </select>
+                </div>
+                <div class="col-12">
+                  <button class="btn btn-success w-100 btn-lg" onclick="runSinglePrediction()"
+                          {% if not model_ready %}disabled{% endif %}>
+                    <i class="fa-solid fa-magnifying-glass me-2"></i>Predict Transaction
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Result panel -->
+        <div class="col-lg-5">
+          <div class="card border-0 h-100 d-flex flex-column justify-content-center text-center p-4"
+               id="singleResultCard">
+            <div id="singleResultContent">
+              <i class="fa-solid fa-magnifying-glass fa-3x text-muted mb-3"></i>
+              <p class="text-muted">Enter transaction details and click Predict</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /single pane -->
+
+  </div><!-- /tab-content -->
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const filename = "{{ filename }}";
+
+function runBatchPrediction() {
+  const btn = document.getElementById('runBatchBtn');
+  const spinner = document.getElementById('batchSpinner');
+  const icon = document.getElementById('batchIcon');
+  btn.disabled = true;
+  spinner.classList.remove('d-none');
+  icon.classList.add('d-none');
+
+  fetch('/predict/' + encodeURIComponent(filename), { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      spinner.classList.add('d-none');
+      icon.classList.remove('d-none');
+      btn.disabled = false;
+      if (data.error) { showToast('Error: ' + data.error, 'danger'); return; }
+      renderBatchResults(data);
+    })
+    .catch(err => {
+      spinner.classList.add('d-none');
+      icon.classList.remove('d-none');
+      btn.disabled = false;
+      showToast('Network error: ' + err, 'danger');
+    });
+}
+
+function renderBatchResults(data) {
+  document.getElementById('summaryCards').classList.remove('d-none');
+  document.getElementById('statTotal').textContent = data.total.toLocaleString();
+  document.getElementById('statFraud').textContent = data.fraud_count.toLocaleString();
+  document.getElementById('statLegit').textContent = data.legit_count.toLocaleString();
+  document.getElementById('statAtRisk').textContent = '$' + data.amt_at_risk.toLocaleString();
+
+  // Build table
+  const preview = data.preview;
+  if (preview && preview.length > 0) {
+    const cols = Object.keys(preview[0]);
+    const priorityCols = ['label', 'prediction', 'fraud_probability', 'amt', 'category',
+                          'trans_date_trans_time', 'is_fraud'];
+    const orderedCols = [
+      ...priorityCols.filter(c => cols.includes(c)),
+      ...cols.filter(c => !priorityCols.includes(c)),
+    ].slice(0, 12);
+
+    document.getElementById('resultsTableHead').innerHTML =
+      '<tr>' + orderedCols.map(c => `<th>${c}</th>`).join('') + '</tr>';
+
+    document.getElementById('resultsTableBody').innerHTML = preview.map(row => {
+      const isFraud = row.prediction == 1 || row.label === 'FRAUD';
+      return `<tr class="${isFraud ? 'table-danger' : ''}">` +
+        orderedCols.map(c => {
+          let val = row[c] !== undefined ? row[c] : '';
+          if (c === 'label') val = `<span class="badge ${isFraud ? 'bg-danger' : 'bg-success'}">${val}</span>`;
+          if (c === 'fraud_probability') val = val + '%';
+          return `<td>${val}</td>`;
+        }).join('') +
+        '</tr>';
+    }).join('');
+
+    document.getElementById('resultsTableCard').classList.remove('d-none');
+    document.getElementById('downloadBtn').href = '/download/' + encodeURIComponent(data.results_filename);
+    document.getElementById('viewResultsBtn').href = '/results/' + encodeURIComponent(data.results_filename);
+  }
+
+  showToast(`Predictions complete! Detected ${data.fraud_count.toLocaleString()} fraudulent transactions.`,
+            data.fraud_count > 0 ? 'warning' : 'success');
+}
+
+function runSinglePrediction() {
+  const payload = {
+    amt: parseFloat(document.getElementById('s_amt').value) || 0,
+    category: document.getElementById('s_category').value,
+    hour: parseInt(document.getElementById('s_hour').value) || 0,
+    day_of_week: parseInt(document.getElementById('s_dow').value) || 0,
+    lat: parseFloat(document.getElementById('s_lat').value) || 0,
+    long: parseFloat(document.getElementById('s_long').value) || 0,
+    merch_lat: parseFloat(document.getElementById('s_merch_lat').value) || 0,
+    merch_long: parseFloat(document.getElementById('s_merch_long').value) || 0,
+    age: parseInt(document.getElementById('s_age').value) || 35,
+    gender: document.getElementById('s_gender').value,
+  };
+  // Derived features
+  payload.amt_log = Math.log1p(payload.amt);
+  const R = 6371;
+  const dLat = (payload.merch_lat - payload.lat) * Math.PI / 180;
+  const dLon = (payload.merch_long - payload.long) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(payload.lat*Math.PI/180) *
+            Math.cos(payload.merch_lat*Math.PI/180) * Math.sin(dLon/2)**2;
+  payload.distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  fetch('/api/predict-single', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { showToast(data.error, 'danger'); return; }
+    renderSingleResult(data);
+  })
+  .catch(err => showToast('Error: ' + err, 'danger'));
+}
+
+function renderSingleResult(data) {
+  const isFraud = data.prediction === 1;
+  const riskColors = { LOW: 'success', MEDIUM: 'warning', HIGH: 'danger', CRITICAL: 'danger' };
+  const color = isFraud ? 'danger' : 'success';
+  const icon = isFraud ? 'fa-triangle-exclamation' : 'fa-circle-check';
+  document.getElementById('singleResultContent').innerHTML = `
+    <div class="result-icon text-${color} mb-3">
+      <i class="fa-solid ${icon} fa-4x"></i>
+    </div>
+    <h2 class="text-${color} fw-bold">${data.label}</h2>
+    <div class="my-3">
+      <div class="display-4 fw-bold">${data.fraud_probability}%</div>
+      <div class="text-muted small">Fraud Probability</div>
+    </div>
+    <div class="mb-3">
+      <span class="badge bg-${riskColors[data.risk_level]} fs-6 px-3 py-2">
+        ${data.risk_level} RISK
+      </span>
+    </div>
+    <div class="progress" style="height:12px;" title="Fraud probability">
+      <div class="progress-bar bg-${color}" style="width:${data.fraud_probability}%;"></div>
+    </div>
+  `;
+}
+</script>
+{% endblock %}

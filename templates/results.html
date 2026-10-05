@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Results — {{ filename }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4" style="margin-top:64px;">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+    <div>
+      <h3 class="mb-0 fw-bold">
+        <i class="fa-solid fa-chart-pie text-info me-2"></i>Prediction Results
+      </h3>
+      <p class="text-muted mb-0">
+        <i class="fa-solid fa-file-csv me-1"></i>{{ filename }}
+      </p>
+    </div>
+    <a href="/download/{{ filename }}" class="btn btn-success">
+      <i class="fa-solid fa-download me-2"></i>Download CSV
+    </a>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card card border-0 p-4 text-center">
+        <i class="fa-solid fa-list-ol fa-2x text-info mb-2"></i>
+        <div class="display-6 fw-bold">{{ "{:,}".format(total) }}</div>
+        <div class="text-muted">Total Transactions</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card card border-0 p-4 text-center">
+        <i class="fa-solid fa-triangle-exclamation fa-2x text-danger mb-2"></i>
+        <div class="display-6 fw-bold text-danger">{{ "{:,}".format(fraud_count) }}</div>
+        <div class="text-muted">Fraud Detected</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card card border-0 p-4 text-center">
+        <i class="fa-solid fa-circle-check fa-2x text-success mb-2"></i>
+        <div class="display-6 fw-bold text-success">{{ "{:,}".format(legit_count) }}</div>
+        <div class="text-muted">Legitimate</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="stat-card card border-0 p-4 text-center">
+        <i class="fa-solid fa-percent fa-2x text-warning mb-2"></i>
+        <div class="display-6 fw-bold text-warning">{{ fraud_pct }}%</div>
+        <div class="text-muted">Fraud Rate</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Amount at risk alert -->
+  {% if amt_at_risk > 0 %}
+  <div class="alert alert-danger d-flex align-items-center gap-3 mb-4">
+    <i class="fa-solid fa-dollar-sign fa-2x"></i>
+    <div>
+      <div class="fw-bold fs-5">
+        Total Amount at Risk: ${{ "{:,.2f}".format(amt_at_risk) }}
+      </div>
+      <small>Sum of all transaction amounts flagged as fraudulent.</small>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Charts row -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-4">
+      <div class="card border-0">
+        <div class="card-header py-2">
+          <h6 class="mb-0">Fraud vs Legitimate</h6>
+        </div>
+        <div class="card-body p-3">
+          <div id="pieChart" style="height:280px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card border-0">
+        <div class="card-header py-2">
+          <h6 class="mb-0">Fraud by Category</h6>
+        </div>
+        <div class="card-body p-3">
+          <div id="categoryChart" style="height:280px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card border-0">
+        <div class="card-header py-2">
+          <h6 class="mb-0">Fraud Probability Distribution</h6>
+        </div>
+        <div class="card-body p-3">
+          <div id="probChart" style="height:280px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data table -->
+  <div class="card border-0">
+    <div class="card-header d-flex align-items-center py-2">
+      <h6 class="mb-0">
+        <i class="fa-solid fa-table me-2"></i>Transaction Predictions
+        <small class="text-muted">(first 100 rows)</small>
+      </h6>
+      <span class="ms-auto badge bg-secondary">{{ "{:,}".format(total) }} total rows</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height:500px;">
+        <table class="table table-sm table-hover mb-0 small">
+          <thead>
+            <tr>
+              {% for col in columns[:12] %}
+              <th>{{ col }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in preview %}
+            <tr class="{% if row.get('prediction') == 1 or row.get('label') == 'FRAUD' %}table-danger{% endif %}">
+              {% for col in columns[:12] %}
+              <td>
+                {% if col == 'label' %}
+                  <span class="badge {% if row.get(col) == 'FRAUD' %}bg-danger{% else %}bg-success{% endif %}">
+                    {{ row.get(col, '') }}
+                  </span>
+                {% elif col == 'fraud_probability' %}
+                  {{ row.get(col, '') }}%
+                {% else %}
+                  {{ row.get(col, '') }}
+                {% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ---- Chart data as JSON blobs — linter-safe ---- #}
+<script type="application/json" id="results-data">
+  {
+    "total":      {{ total }},
+    "fraudCount": {{ fraud_count }},
+    "legitCount": {{ legit_count }}
+  }
+</script>
+<script type="application/json" id="preview-data">{{ preview | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var rd      = JSON.parse(document.getElementById('results-data').textContent);
+    var preview = JSON.parse(document.getElementById('preview-data').textContent);
+
+    var darkLayout = {
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor:  'rgba(0,0,0,0)',
+      font:   { color: '#e0e0e0' },
+      margin: { t: 20, b: 30, l: 40, r: 20 }
+    };
+    var cfg = { responsive: true, displaylogo: false };
+
+    /* Pie chart */
+    Plotly.newPlot('pieChart', [{
+      type:   'pie',
+      labels: ['Legitimate', 'Fraud'],
+      values: [rd.legitCount, rd.fraudCount],
+      marker: { colors: ['#2ecc71', '#e74c3c'] },
+      hole:   0.4
+    }], Object.assign({}, darkLayout, { showlegend: true }), cfg);
+
+    /* Category chart (derived from preview rows) */
+    var catFraud = {};
+    preview.forEach(function (r) {
+      if ((r.prediction === 1 || r.label === 'FRAUD') && r.category) {
+        catFraud[r.category] = (catFraud[r.category] || 0) + 1;
+      }
+    });
+    var catSorted = Object.entries(catFraud)
+      .sort(function (a, b) { return b[1] - a[1]; })
+      .slice(0, 8);
+
+    if (catSorted.length > 0) {
+      Plotly.newPlot('categoryChart', [{
+        type: 'bar', orientation: 'h',
+        x: catSorted.map(function (c) { return c[1]; }),
+        y: catSorted.map(function (c) { return c[0]; }),
+        marker: { color: '#e74c3c' }
+      }], Object.assign({}, darkLayout, {
+        yaxis: { tickfont: { size: 10 } }
+      }), cfg);
+    }
+
+    /* Probability histogram */
+    var probs = preview
+      .filter(function (r) { return r.fraud_probability !== undefined && r.fraud_probability !== null; })
+      .map(function (r) { return parseFloat(r.fraud_probability); });
+
+    if (probs.length > 0) {
+      Plotly.newPlot('probChart', [{
+        type:    'histogram',
+        x:       probs,
+        nbinsx:  20,
+        marker:  { color: '#f39c12' }
+      }], Object.assign({}, darkLayout, {
+        xaxis: { title: 'Fraud Probability (%)' },
+        yaxis: { title: 'Count' }
+      }), cfg);
+    }
+  }());
+</script>
+{% endblock %}

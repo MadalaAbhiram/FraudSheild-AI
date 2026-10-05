@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}EDA Analysis — {{ filename }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid eda-shell px-3 px-lg-4 py-4">
+
+  <!-- Page header -->
+  <div class="row mb-4">
+    <div class="col">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div>
+          <h3 class="mb-0 fw-bold">
+            <i class="fa-solid fa-chart-bar text-info me-2"></i>Exploratory Data Analysis
+          </h3>
+          <p class="text-muted mb-0">
+            <i class="fa-solid fa-file-csv me-1"></i>{{ filename }}
+            &nbsp;&middot;&nbsp;
+            {% if info %}{{ info.rows | int | format_number }}{% endif %} rows
+            &nbsp;&middot;&nbsp; {{ file_size }}
+          </p>
+          {% if info and info.is_sampled %}
+          <p class="text-info small mb-0 mt-1">
+            <i class="fa-solid fa-gauge-high me-1"></i>
+            Fast EDA preview uses {{ info.analysis_rows | int | format_number }} rows from the uploaded file.
+            Training and prediction still use the full dataset.
+          </p>
+          {% endif %}
+        </div>
+        <div class="ms-auto">
+          <a href="{{ url_for('model_page', filename=filename) }}" class="btn btn-warning">
+            <i class="fa-solid fa-brain me-2"></i>Train Models
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- ======== SIDEBAR ================================================= -->
+    <div class="col-lg-3 col-xl-2">
+      <div class="card border-0 eda-sidebar sticky-lg-top">
+        <div class="card-header py-3">
+          <small class="text-muted fw-semibold text-uppercase">Analysis Steps</small>
+        </div>
+        <div class="list-group list-group-flush" id="stepNav">
+          {% for step in steps %}
+          <a href="#"
+             class="list-group-item list-group-item-action step-nav-item d-flex align-items-center gap-3 py-3 px-3 {% if loop.first %}active{% endif %}"
+             data-step="{{ step.step }}">
+            <span class="step-badge">{{ step.step }}</span>
+            <span class="step-nav-title">{{ step.title | replace('Step ' ~ step.step ~ ': ', '') }}</span>
+          </a>
+          {% endfor %}
+        </div>
+        <div class="card-footer py-3">
+          <div class="progress" style="height:6px;" title="Analysis Progress">
+            <div class="progress-bar bg-danger" id="overallProgress" style="width:11%;"></div>
+          </div>
+          <small class="text-muted d-block mt-2" id="progressLabel">Step 1 of {{ steps|length }}</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== MAIN CONTENT ============================================ -->
+    <div class="col-lg-9 col-xl-10">
+
+      {% for step in steps %}
+      <div class="step-panel {% if not loop.first %}d-none{% endif %}" id="step-{{ step.step }}">
+
+        <!-- Step header -->
+        <div class="card border-0 mb-3 eda-step-header">
+          <div class="card-body">
+            <div class="eda-title-row">
+              <div class="step-number-badge">{{ step.step }}</div>
+              <h5>{{ step.title }}</h5>
+              <div class="eda-nav-btns">
+                {% if not loop.first %}
+                <button class="btn btn-sm btn-outline-secondary step-prev-btn" data-target="{{ step.step - 1 }}">
+                  <i class="fa-solid fa-arrow-left me-1"></i>Prev
+                </button>
+                {% endif %}
+                {% if not loop.last %}
+                <button class="btn btn-sm btn-outline-info step-next-btn" data-target="{{ step.step + 1 }}">
+                  Next <i class="fa-solid fa-arrow-right ms-1"></i>
+                </button>
+                {% endif %}
+              </div>
+            </div>
+            <p class="eda-desc">{{ step.description }}</p>
+          </div>
+        </div>
+
+        <!-- Chart container -->
+        <div class="card border-0 mb-3 eda-plot-card">
+          <div class="card-body p-2 p-md-3">
+            <div class="eda-plot" id="plot-{{ step.step }}"></div>
+          </div>
+        </div>
+
+        <!-- Stats table -->
+        {% if step.stats %}
+        <div class="card border-0 mb-4 eda-stats-card">
+          <div class="card-header py-3">
+            <small class="text-muted fw-semibold text-uppercase">
+              <i class="fa-solid fa-table-cells me-1"></i>Statistics
+            </small>
+          </div>
+          <div class="card-body">
+            <div class="eda-stats-grid">
+              {% for key, value in step.stats.items() %}
+              <div class="eda-stat-item">
+                <div class="eda-stat-label">{{ key }}</div>
+                {% if value is mapping %}
+                <div class="eda-stat-chips">
+                  {% for item_key, item_value in value.items() %}
+                  <span class="eda-stat-chip">
+                    <span>{{ item_key }}</span>
+                    <strong>{{ item_value }}</strong>
+                  </span>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <div class="eda-stat-value">{{ value }}</div>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+      </div>
+      {% endfor %}
+
+    </div><!-- /main content -->
+  </div><!-- /row -->
+</div>
+
+{# ---- Plotly data injected as JSON blobs — one per step ---- #}
+{% for step in steps %}
+<script type="application/json" id="plotdata-{{ step.step }}">{{ step.plot | safe }}</script>
+{% endfor %}
+
+{# ---- Config values passed via a single JSON blob ---- #}
+<script type="application/json" id="eda-config">
+  { "totalSteps": {{ steps|length }} }
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var cfg     = JSON.parse(document.getElementById('eda-config').textContent);
+    var total    = cfg.totalSteps;
+    var current  = 1;
+    var rendered = {};
+
+    function getPlotData(stepNum) {
+      var el = document.getElementById('plotdata-' + stepNum);
+      return el ? JSON.parse(el.textContent) : null;
+    }
+
+    function renderPlot(stepNum) {
+      var div = document.getElementById('plot-' + stepNum);
+      if (!div) return;
+      var data = getPlotData(stepNum);
+      if (data && data.data) {
+        var layout = Object.assign({}, data.layout || {}, {
+          paper_bgcolor: 'rgba(0,0,0,0)',
+          plot_bgcolor:  'rgba(0,0,0,0)',
+          font:   { color: '#e0e0e0' },
+          autosize: true,
+          margin: { t: 50, b: 60, l: 60, r: 28 },
+          title: Object.assign({}, (data.layout && data.layout.title) ? data.layout.title : {}, {
+            pad: { t: 8 }
+          })
+        });
+        if (rendered[stepNum]) {
+          Plotly.react(div, data.data, layout, { responsive: true, displaylogo: false });
+        } else {
+          Plotly.newPlot(div, data.data, layout, { responsive: true, displaylogo: false });
+          rendered[stepNum] = true;
+        }
+        requestAnimationFrame(function () {
+          Plotly.Plots.resize(div);
+        });
+      }
+    }
+
+    function activateStep(stepNum) {
+      document.querySelectorAll('.step-panel').forEach(function (p) {
+        p.classList.add('d-none');
+      });
+      var target = document.getElementById('step-' + stepNum);
+      if (target) target.classList.remove('d-none');
+
+      document.querySelectorAll('.step-nav-item').forEach(function (a) {
+        a.classList.remove('active');
+      });
+      var nav = document.querySelector('[data-step="' + stepNum + '"]');
+      if (nav) {
+        nav.classList.add('active');
+        nav.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      var pct = Math.round((stepNum / total) * 100);
+      document.getElementById('overallProgress').style.width = pct + '%';
+      document.getElementById('progressLabel').textContent =
+        'Step ' + stepNum + ' of ' + total;
+
+      current = stepNum;
+      requestAnimationFrame(function () {
+        renderPlot(stepNum);
+      });
+    }
+
+    /* sidebar step links — event delegation */
+    document.getElementById('stepNav').addEventListener('click', function (e) {
+      var link = e.target.closest('[data-step]');
+      if (link) {
+        e.preventDefault();
+        activateStep(parseInt(link.getAttribute('data-step'), 10));
+      }
+    });
+
+    /* prev / next buttons — event delegation on document */
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.step-prev-btn, .step-next-btn');
+      if (btn) {
+        var target = parseInt(btn.getAttribute('data-target'), 10);
+        if (!isNaN(target)) activateStep(target);
+      }
+    });
+
+    /* keyboard navigation */
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' && current < total) activateStep(current + 1);
+      if (e.key === 'ArrowLeft'  && current > 1)     activateStep(current - 1);
+    });
+
+    /* initial render */
+    document.addEventListener('DOMContentLoaded', function () { activateStep(1); });
+    window.addEventListener('resize', function () {
+      var div = document.getElementById('plot-' + current);
+      if (div && rendered[current]) Plotly.Plots.resize(div);
+    });
+  }());
+</script>
+{% endblock %}

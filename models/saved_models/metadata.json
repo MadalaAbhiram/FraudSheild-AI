@@ -1,0 +1,142 @@
+{
+  "best_model_name": "Random Forest",
+  "feature_names": [
+    "category",
+    "amt",
+    "gender",
+    "state",
+    "lat",
+    "long",
+    "job",
+    "merch_lat",
+    "merch_long",
+    "hour",
+    "day_of_week",
+    "month",
+    "age",
+    "distance",
+    "amt_log"
+  ],
+  "metrics": {
+    "accuracy": 0.9974,
+    "precision": 0.818,
+    "recall": 0.7155,
+    "f1_score": 0.7633,
+    "roc_auc": 0.9846,
+    "confusion_matrix": [
+      [
+        257595,
+        239
+      ],
+      [
+        427,
+        1074
+      ]
+    ],
+    "classification_report": {
+      "Legitimate": {
+        "precision": 0.9983451023556131,
+        "recall": 0.999073046999232,
+        "f1-score": 0.998708942030334,
+        "support": 257834.0
+      },
+      "Fraud": {
+        "precision": 0.817974105102818,
+        "recall": 0.715522984676882,
+        "f1-score": 0.7633262260127932,
+        "support": 1501.0
+      },
+      "accuracy": 0.9974318931112268,
+      "macro avg": {
+        "precision": 0.9081596037292156,
+        "recall": 0.857298015838057,
+        "f1-score": 0.8810175840215636,
+        "support": 259335.0
+      },
+      "weighted avg": {
+        "precision": 0.9973011365705227,
+        "recall": 0.9974318931112268,
+        "f1-score": 0.9973465749886994,
+        "support": 259335.0
+      }
+    },
+    "cross_validation_5fold": {
+      "accuracy_mean": 0.9965,
+      "accuracy_std": 0.0005,
+      "precision_mean": 0.7452,
+      "precision_std": 0.0547,
+      "recall_mean": 0.6141,
+      "recall_std": 0.0924,
+      "f1_mean": 0.6694,
+      "f1_std": 0.0648,
+      "roc_auc_mean": 0.9803,
+      "roc_auc_std": 0.0145,
+      "n_folds": 5
+    },
+    "feature_importance": [
+      {
+        "feature": "amt",
+        "importance": 0.323457
+      },
+      {
+        "feature": "amt_log",
+        "importance": 0.314561
+      },
+      {
+        "feature": "hour",
+        "importance": 0.153635
+      },
+      {
+        "feature": "category",
+        "importance": 0.070945
+      },
+      {
+        "feature": "age",
+        "importance": 0.01832
+      },
+      {
+        "feature": "distance",
+        "importance": 0.015498
+      },
+      {
+        "feature": "job",
+        "importance": 0.015393
+      },
+      {
+        "feature": "merch_long",
+        "importance": 0.013729
+      },
+      {
+        "feature": "month",
+        "importance": 0.013429
+      },
+      {
+        "feature": "merch_lat",
+        "importance": 0.013284
+      },
+      {
+        "feature": "long",
+        "importance": 0.013241
+      },
+      {
+        "feature": "lat",
+        "importance": 0.012719
+      },
+      {
+        "feature": "state",
+        "importance": 0.011797
+      },
+      {
+        "feature": "day_of_week",
+        "importance": 0.007414
+      },
+      {
+        "feature": "gender",
+        "importance": 0.002577
+      }
+    ],
+    "status": "success",
+    "trained_on_rows": 100000
+  },
+  "pos_weight": 171.7
+}

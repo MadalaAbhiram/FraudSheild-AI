@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}ML Foundation & Concepts — FraudShield AI{% endblock %}
+
+{% block content %}
+<div class="algo-page">
+
+  <!-- ===== PAGE HERO ===================================================== -->
+  <div class="algo-hero">
+    <div class="container">
+      <div class="algo-hero-inner">
+        <span class="section-label mb-3 d-inline-block">Academic & Mathematical Foundation</span>
+        <h1 class="algo-hero-title">
+          ML Concepts Behind<br>
+          <span class="text-gradient">FraudShield AI</span>
+        </h1>
+        <p class="algo-hero-sub">
+          Comprehensive documentation of all Machine Learning paradigms implemented in FraudShield AI:
+          Supervised Classification, 5-Fold Cross Validation, PCA Feature Identification, and Unsupervised Anomaly Detection.
+        </p>
+
+        <!-- Module tab pills -->
+        <div class="algo-pill-nav mt-4 flex-wrap" role="tablist">
+          <button class="algo-pill active" data-bs-toggle="tab" data-bs-target="#m1" type="button" role="tab">
+            <i class="fa-solid fa-rotate me-2"></i>M1 — ML Lifecycle
+          </button>
+          <button class="algo-pill" data-bs-toggle="tab" data-bs-target="#m2" type="button" role="tab">
+            <i class="fa-solid fa-chart-line me-2"></i>M2 — Linear & Logistic Models
+          </button>
+          <button class="algo-pill" data-bs-toggle="tab" data-bs-target="#m3" type="button" role="tab">
+            <i class="fa-solid fa-tree me-2"></i>M3 — Decision Trees & Ensembles
+          </button>
+          <button class="algo-pill" data-bs-toggle="tab" data-bs-target="#m4" type="button" role="tab">
+            <i class="fa-solid fa-diagram-project me-2"></i>M4 — PCA & Unsupervised Learning
+          </button>
+          <button class="algo-pill" data-bs-toggle="tab" data-bs-target="#m5" type="button" role="tab">
+            <i class="fa-solid fa-arrows-split-up-and-left me-2"></i>M5 — 5-Fold Cross Validation
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TAB CONTENT =================================================== -->
+  <div class="container algo-body">
+    <div class="tab-content">
+
+      <!-- ==============================================================
+           M1 — ML Lifecycle
+           ============================================================== -->
+      <div class="tab-pane fade show active" id="m1" role="tabpanel">
+
+        <div class="algo-intro-banner mb-5">
+          <div class="algo-intro-icon">
+            <i class="fa-solid fa-rotate fa-xl text-danger"></i>
+          </div>
+          <div>
+            <h4 class="fw-bold mb-1">M1 — End-to-End ML System Lifecycle</h4>
+            <p class="text-muted mb-0">
+              FraudShield AI transforms raw transaction streams into real-time risk scores. Every stage of the ML lifecycle maps directly to production code in this application.
+            </p>
+          </div>
+        </div>
+
+        <h5 class="algo-section-head mb-4">
+          <i class="fa-solid fa-arrow-right-long text-danger me-2"></i>
+          The ML System Lifecycle — Stage by Stage
+        </h5>
+
+        <div class="lifecycle-pipeline mb-5">
+          {% set stages = [
+            ('fa-file-csv',       'Raw Data Ingestion','fraudTrain.csv / fraudTest.csv',                              'uploads/',                          'danger'),
+            ('fa-broom',          'Cleaning & Imputation','Drop PII, median fill nulls, remove duplicates',           'preprocessing/preprocess.py',       'orange'),
+            ('fa-gears',          'Feature Engineering','hour, day_of_week, age, distance, amt_log',                  'preprocessing/preprocess.py',       'warning'),
+            ('fa-chart-pie',      'PCA & Feature Selection','Variance explanation, component loading vectors',         'preprocess.perform_pca()',          'success'),
+            ('fa-brain',          'Supervised & Unsupervised Training','LR, SGD, DT, RF, LightGBM, K-Means, DBSCAN, IsolationForest','models/train_model.py', 'purple'),
+            ('fa-square-check',   '5-Fold Cross Validation','Stratified 5-Fold CV evaluation across folds',            'train_model.run_5fold_cv()',        'info'),
+            ('fa-box-archive',    'Model Registry',    'best_model.pkl + preprocessor.pkl via joblib',                'models/saved_models/',              'blue'),
+            ('fa-plug',           'Serving REST Endpoint','Flask routes /train, /predict, /api/predict-single',       'app.py',                            'success'),
+          ] %}
+          {% for s in stages %}
+          <div class="lc-step">
+            <div class="lc-icon lc-{{ s[4] }}">
+              <i class="fa-solid {{ s[0] }}"></i>
+            </div>
+            {% if not loop.last %}<div class="lc-arrow"><i class="fa-solid fa-chevron-right"></i></div>{% endif %}
+            <div class="lc-label">
+              <div class="lc-name">{{ s[1] }}</div>
+              <div class="lc-detail">{{ s[2] }}</div>
+              <code class="lc-file">{{ s[3] }}</code>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- ==============================================================
+           M2 — Linear & Logistic Models
+           ============================================================== -->
+      <div class="tab-pane fade" id="m2" role="tabpanel">
+        <div class="algo-intro-banner mb-5">
+          <div class="algo-intro-icon">
+            <i class="fa-solid fa-chart-line fa-xl text-info"></i>
+          </div>
+          <div>
+            <h4 class="fw-bold mb-1">M2 — Supervised Learning: Linear & Logistic Models</h4>
+            <p class="text-muted mb-0">
+              Logistic Regression and Stochastic Gradient Descent (SGD) Linear Models serve as fast baseline models for binary fraud classification.
+            </p>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-5">
+          <div class="col-lg-6">
+            <div class="algo-card h-100">
+              <h5 class="fw-bold mb-2">Logistic Regression</h5>
+              <p class="text-muted small mb-3">Maps linear feature combinations through the sigmoid function to output a fraud probability:</p>
+              <div class="algo-formula mb-3">P(fraud=1) = σ(w·x + b) = 1 / (1 + e<sup>−(w·x+b)</sup>)</div>
+              <p class="text-muted small mb-0">Configured with <code>class_weight='balanced'</code> to adjust decision boundaries for minority fraud samples.</p>
+            </div>
+          </div>
+
+          <div class="col-lg-6">
+            <div class="algo-card h-100">
+              <h5 class="fw-bold mb-2">Linear Model (SGD)</h5>
+              <p class="text-muted small mb-3">Uses Stochastic Gradient Descent optimization with log loss to compute linear classification boundaries in linear time O(n):</p>
+              <div class="algo-formula mb-3">L(y, f(x)) = log(1 + e<sup>−y·f(x)</sup>)</div>
+              <p class="text-muted small mb-0">Highly efficient for online training and streaming datasets.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================================================
+           M3 — Decision Trees & Ensembles
+           ============================================================== -->
+      <div class="tab-pane fade" id="m3" role="tabpanel">
+        <div class="algo-intro-banner mb-5">
+          <div class="algo-intro-icon">
+            <i class="fa-solid fa-tree fa-xl text-warning"></i>
+          </div>
+          <div>
+            <h4 class="fw-bold mb-1">M3 — Supervised Learning: Decision Trees & Ensembles</h4>
+            <p class="text-muted mb-0">
+              Tree-based ensemble models (Decision Trees, Random Forests, LightGBM/XGBoost) model complex non-linear feature interactions without requiring explicit feature scaling.
+            </p>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-5">
+          <div class="col-lg-6">
+            <div class="algo-card h-100">
+              <h5 class="fw-bold mb-2">Decision Trees</h5>
+              <p class="text-muted small mb-3">Recursively partitions feature space to maximize Gini impurity reduction at each split node.</p>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="algo-card h-100">
+              <h5 class="fw-bold mb-2">Random Forests & Gradient Boosting</h5>
+              <p class="text-muted small mb-3">Combines multiple bootstrapped decision trees (Bagging) or sequential residual-correcting trees (Gradient Boosting) for maximum F1-Score performance.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================================================
+           M4 — PCA & Unsupervised Learning
+           ============================================================== -->
+      <div class="tab-pane fade" id="m4" role="tabpanel">
+        <div class="algo-intro-banner mb-5">
+          <div class="algo-intro-icon">
+            <i class="fa-solid fa-diagram-project fa-xl text-success"></i>
+          </div>
+          <div>
+            <h4 class="fw-bold mb-1">M4 — PCA Feature Identification & Unsupervised Learning</h4>
+            <p class="text-muted mb-0">
+              Explores latent feature structures, dimensionality reduction, clustering, and anomaly detection without relying on target labels.
+            </p>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-5">
+          <!-- PCA -->
+          <div class="col-lg-6">
+            <div class="algo-card h-100 border-success">
+              <h5 class="fw-bold mb-2 text-success"><i class="fa-solid fa-chart-pie me-2"></i>Principal Component Analysis (PCA)</h5>
+              <p class="text-muted small mb-3">
+                Transforms high-dimensional correlated features into orthogonal principal components (PC1, PC2...) by computing eigenvectors of the covariance matrix:
+              </p>
+              <div class="algo-formula mb-3">Σ · v = λ · v</div>
+              <p class="text-muted small mb-0">
+                In FraudShield AI, <code>perform_pca()</code> retains 95% cumulative explained variance and identifies top feature loading contributions per component.
+              </p>
+            </div>
+          </div>
+
+          <!-- K-Means -->
+          <div class="col-lg-6">
+            <div class="algo-card h-100 border-warning">
+              <h5 class="fw-bold mb-2 text-warning"><i class="fa-solid fa-object-group me-2"></i>K-Means Clustering</h5>
+              <p class="text-muted small mb-3">
+                Partitions transaction vectors into k=2 centroids by minimizing intra-cluster sum-of-squares distance:
+              </p>
+              <div class="algo-formula mb-3">J = Σ Σ ||xᵢ - μₖ||²</div>
+              <p class="text-muted small mb-0">Evaluates cluster separation using Silhouette Scores and measures alignment with true fraud labels.</p>
+            </div>
+          </div>
+
+          <!-- DBSCAN -->
+          <div class="col-lg-6">
+            <div class="algo-card h-100 border-info">
+              <h5 class="fw-bold mb-2 text-info"><i class="fa-solid fa-circle-nodes me-2"></i>DBSCAN Clustering</h5>
+              <p class="text-muted small mb-3">
+                Density-based spatial clustering that groups dense regions (core points) and marks sparse, isolated transactions as outlier noise (-1).
+              </p>
+            </div>
+          </div>
+
+          <!-- Isolation Forest -->
+          <div class="col-lg-6">
+            <div class="algo-card h-100 border-danger">
+              <h5 class="fw-bold mb-2 text-danger"><i class="fa-solid fa-shield-cat me-2"></i>Isolation Forest (Anomaly Detection)</h5>
+              <p class="text-muted small mb-3">
+                Isolates anomalies by randomly selecting features and split values. Anomalous, rare transactions require significantly fewer splits to isolate (shorter path lengths in isolation trees).
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==============================================================
+           M5 — 5-Fold Cross Validation
+           ============================================================== -->
+      <div class="tab-pane fade" id="m5" role="tabpanel">
+        <div class="algo-intro-banner mb-5">
+          <div class="algo-intro-icon">
+            <i class="fa-solid fa-arrows-split-up-and-left fa-xl text-primary"></i>
+          </div>
+          <div>
+            <h4 class="fw-bold mb-1">M5 — 5-Fold Stratified Cross Validation</h4>
+            <p class="text-muted mb-0">
+              Ensures rigorous generalization and prevents evaluation variance by partitioning training datasets into 5 stratified folds.
+            </p>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-5">
+          <div class="col-lg-12">
+            <div class="algo-card">
+              <h5 class="fw-bold mb-2"><i class="fa-solid fa-square-check me-2 text-primary"></i>Stratified 5-Fold Evaluation Protocol</h5>
+              <p class="text-muted small mb-3">
+                Given extreme class imbalance, <code>StratifiedKFold(n_splits=5)</code> ensures that every fold maintains the exact percentage of positive fraud cases.
+              </p>
+              <div class="row g-3 text-center">
+                <div class="col-md-2"><div class="badge bg-primary w-100 py-2">Fold 1: Train/Val</div></div>
+                <div class="col-md-2"><div class="badge bg-primary w-100 py-2">Fold 2: Train/Val</div></div>
+                <div class="col-md-2"><div class="badge bg-primary w-100 py-2">Fold 3: Train/Val</div></div>
+                <div class="col-md-2"><div class="badge bg-primary w-100 py-2">Fold 4: Train/Val</div></div>
+                <div class="col-md-2"><div class="badge bg-primary w-100 py-2">Fold 5: Train/Val</div></div>
+                <div class="col-md-2"><div class="badge bg-success w-100 py-2">Mean ± Std Metrics</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab-content -->
+  </div><!-- /container -->
+</div><!-- /algo-page -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var hash = window.location.hash;
+    if (hash) {
+      var btn = document.querySelector('[data-bs-target="' + hash + '"]');
+      if (btn) btn.click();
+    }
+    document.querySelectorAll('.algo-pill').forEach(function (btn) {
+      btn.addEventListener('shown.bs.tab', function () {
+        window.location.hash = btn.getAttribute('data-bs-target');
+      });
+    });
+  });
+</script>
+{% endblock %}

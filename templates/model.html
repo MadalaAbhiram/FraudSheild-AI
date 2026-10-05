@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+{% block title %}Model Training & ML Analysis — {{ filename }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4" style="margin-top:64px;">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+    <div>
+      <h3 class="mb-0 fw-bold"><i class="fa-solid fa-brain text-warning me-2"></i>Machine Learning Models & PCA Analysis</h3>
+      <p class="text-muted mb-0"><i class="fa-solid fa-file-csv me-1"></i>Dataset: {{ filename }}</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('eda', filename=filename) }}" class="btn btn-outline-info btn-sm">
+        <i class="fa-solid fa-chart-bar me-1"></i>Back to EDA
+      </a>
+      <a href="{{ url_for('predict_page', filename=filename) }}" class="btn btn-success btn-sm" id="toPredictBtn" style="display:none!important;">
+        <i class="fa-solid fa-magnifying-glass-chart me-1"></i>Proceed to Predict
+      </a>
+    </div>
+  </div>
+
+  <!-- Training options -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h6 class="fw-bold mb-3"><i class="fa-solid fa-sliders me-2 text-warning"></i>Model Options</h6>
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="useSMOTE" />
+            <label class="form-check-label" for="useSMOTE">
+              Apply SMOTE oversampling (balances class distribution)
+            </label>
+          </div>
+          <p class="text-muted small mb-0">
+            Trains Supervised models (Linear, Logistic, Decision Tree, Random Forest, XGBoost/LightGBM) with <strong>5-Fold Cross-Validation</strong>, Unsupervised models (K-Means, DBSCAN, Isolation Forest), and <strong>PCA Feature Reduction</strong>.
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-5 d-flex align-items-center">
+      <button class="btn btn-warning btn-lg w-100 py-3 fw-bold" id="trainBtn" onclick="trainModels()">
+        <i class="fa-solid fa-play me-2"></i>Run Training & ML Analysis
+      </button>
+    </div>
+  </div>
+
+  <!-- Model cards (pre-training) -->
+  <div class="row g-3 mb-4" id="modelCards">
+    {% for model in [
+      ('Logistic Regression', 'fa-line-chart', 'primary', 'Supervised Linear Classification'),
+      ('Linear Model (SGD)', 'fa-scale-unbalanced', 'secondary', 'Supervised Stochastic Gradient Linear Model'),
+      ('Decision Tree', 'fa-diagram-project', 'info', 'Supervised Non-Linear Decision Tree'),
+      ('Random Forest', 'fa-tree', 'success', 'Supervised Ensemble Trees'),
+      ('K-Means & DBSCAN', 'fa-object-group', 'warning', 'Unsupervised Clustering & Spatial Outliers'),
+      ('Anomaly Detection', 'fa-shield-cat', 'danger', 'Unsupervised Isolation Forest')
+    ] %}
+    <div class="col-sm-6 col-md-4 col-xl-2">
+      <div class="card h-100 border-0 model-card" id="card-{{ model[0] | replace(' ', '_') | replace('(', '') | replace(')', '') }}">
+        <div class="card-body text-center p-3">
+          <i class="fa-solid {{ model[1] }} fa-2x text-{{ model[2] }} mb-2"></i>
+          <h6 class="fw-bold mb-1 fs-6">{{ model[0] }}</h6>
+          <p class="text-muted small mb-2" style="font-size:11px;">{{ model[3] }}</p>
+          <div class="model-status">
+            <span class="badge bg-secondary">Ready</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Training progress -->
+  <div class="card border-0 mb-4 d-none" id="trainingProgress">
+    <div class="card-body">
+      <div class="d-flex align-items-center gap-3">
+        <div class="spinner-border text-warning" role="status"></div>
+        <div>
+          <div class="fw-semibold">Training Supervised & Unsupervised Models, 5-Fold Cross Validation & PCA...</div>
+          <small class="text-muted">Computing metrics across datasets, please wait a few seconds.</small>
+        </div>
+      </div>
+      <div class="progress mt-3" style="height:8px;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning" style="width:100%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results Section -->
+  <div class="d-none" id="resultsSection">
+
+    <!-- Best model banner -->
+    <div class="alert alert-success d-flex align-items-center gap-3 mb-4" id="bestModelBanner">
+      <i class="fa-solid fa-trophy fa-2x"></i>
+      <div>
+        <div class="fw-bold fs-5">Best Performing Model: <span id="bestModelName">—</span></div>
+        <small>Persisted to <code>models/saved_models/best_model.pkl</code> for predictions.</small>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs for Analysis -->
+    <ul class="nav nav-tabs border-bottom-0 mb-4" id="mlTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-bold" id="supervised-tab" data-bs-toggle="tab" data-bs-target="#supervised-pane" type="button" role="tab">
+          <i class="fa-solid fa-robot me-2"></i>Supervised Models & Metrics
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold" id="cv-tab" data-bs-toggle="tab" data-bs-target="#cv-pane" type="button" role="tab">
+          <i class="fa-solid fa-arrows-split-up-and-left me-2"></i>5-Fold Cross Validation
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold" id="unsupervised-tab" data-bs-toggle="tab" data-bs-target="#unsupervised-pane" type="button" role="tab">
+          <i class="fa-solid fa-diagram-nested me-2"></i>Unsupervised Learning & Anomaly Detection
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold" id="pca-tab" data-bs-toggle="tab" data-bs-target="#pca-pane" type="button" role="tab">
+          <i class="fa-solid fa-chart-pie me-2"></i>PCA Feature Identification
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content" id="mlTabsContent">
+
+      <!-- TAB 1: Supervised Models -->
+      <div class="tab-pane fade show active" id="supervised-pane" role="tabpanel">
+        <div class="card border-0 mb-4">
+          <div class="card-header py-3 bg-dark">
+            <h6 class="mb-0 fw-bold"><i class="fa-solid fa-table me-2 text-warning"></i>Supervised Classification Metrics (Test Set Evaluation)</h6>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0 text-center">
+                <thead>
+                  <tr class="table-dark">
+                    <th class="text-start ps-3">Model</th>
+                    <th>Accuracy</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1 Score</th>
+                    <th>ROC-AUC</th>
+                  </tr>
+                </thead>
+                <tbody id="metricsTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-lg-7">
+            <div class="card border-0 h-100">
+              <div class="card-header py-2 bg-dark">
+                <h6 class="mb-0 fw-bold"><i class="fa-solid fa-ranking-star me-2 text-warning"></i>Feature Importance (Best Model)</h6>
+              </div>
+              <div class="card-body p-3">
+                <div id="featureImportancePlot" style="min-height:350px;"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-5">
+            <div class="card border-0 h-100">
+              <div class="card-header py-2 bg-dark">
+                <h6 class="mb-0 fw-bold"><i class="fa-solid fa-table-cells me-2 text-warning"></i>Confusion Matrix (Best Model)</h6>
+              </div>
+              <div class="card-body p-3">
+                <div id="confusionMatrix" style="min-height:350px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: 5-Fold Cross Validation -->
+      <div class="tab-pane fade" id="cv-pane" role="tabpanel">
+        <div class="card border-0 mb-4">
+          <div class="card-header py-3 bg-dark d-flex justify-content-between align-items-center">
+            <h6 class="mb-0 fw-bold"><i class="fa-solid fa-square-check me-2 text-info"></i>5-Fold Stratified Cross-Validation Summary (Mean ± Std Dev)</h6>
+            <span class="badge bg-info text-dark">5 Stratified Folds</span>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0 text-center">
+                <thead>
+                  <tr class="table-dark">
+                    <th class="text-start ps-3">Model</th>
+                    <th>5-Fold Accuracy</th>
+                    <th>5-Fold Precision</th>
+                    <th>5-Fold Recall</th>
+                    <th>5-Fold F1 Score</th>
+                    <th>5-Fold ROC-AUC</th>
+                  </tr>
+                </thead>
+                <tbody id="cvMetricsTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Unsupervised Models -->
+      <div class="tab-pane fade" id="unsupervised-pane" role="tabpanel">
+        <div class="row g-4" id="unsupervisedCards">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+
+      <!-- TAB 4: PCA Feature Identification -->
+      <div class="tab-pane fade" id="pca-pane" role="tabpanel">
+        <div class="row g-4 mb-4">
+          <div class="col-md-5">
+            <div class="card border-0 h-100">
+              <div class="card-header py-2 bg-dark">
+                <h6 class="mb-0 fw-bold"><i class="fa-solid fa-chart-pie me-2 text-success"></i>PCA Variance Summary</h6>
+              </div>
+              <div class="card-body p-3 text-center d-flex flex-column justify-content-center">
+                <h2 class="display-5 fw-bold text-success" id="pcaTotalVariance">—</h2>
+                <p class="text-muted mb-2">Total Variance Explained by Selected Components</p>
+                <div class="badge bg-dark border p-2" id="pcaComponentsCount">Principal Components Retained: —</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-7">
+            <div class="card border-0 h-100">
+              <div class="card-header py-2 bg-dark">
+                <h6 class="mb-0 fw-bold"><i class="fa-solid fa-list-ol me-2 text-success"></i>Top Contributing Features Per Principal Component</h6>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table table-sm table-hover mb-0 text-center" style="font-size:13px;">
+                    <thead>
+                      <tr class="table-dark">
+                        <th>PC Component</th>
+                        <th>Var %</th>
+                        <th>Cum Var %</th>
+                        <th>Top Contributing Feature</th>
+                      </tr>
+                    </thead>
+                    <tbody id="pcaTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="text-center mt-5">
+      <a href="{{ url_for('predict_page', filename=filename) }}" class="btn btn-success btn-lg px-5 fw-bold">
+        <i class="fa-solid fa-magnifying-glass-chart me-2"></i>Proceed to Batch & Single Predictions
+      </a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const filename = "{{ filename }}";
+
+function trainModels() {
+  const useSMOTE = document.getElementById('useSMOTE').checked;
+  document.getElementById('trainBtn').disabled = true;
+  document.getElementById('trainingProgress').classList.remove('d-none');
+
+  fetch('/train/' + encodeURIComponent(filename), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ use_smote: useSMOTE }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('trainingProgress').classList.add('d-none');
+    if (data.error) {
+      showToast('Training error: ' + data.error, 'danger');
+      document.getElementById('trainBtn').disabled = false;
+      return;
+    }
+    renderResults(data);
+  })
+  .catch(err => {
+    document.getElementById('trainingProgress').classList.add('d-none');
+    showToast('Network error: ' + err, 'danger');
+    document.getElementById('trainBtn').disabled = false;
+  });
+}
+
+function renderResults(data) {
+  const results = data.results;
+  const unsupResults = data.unsupervised_results || {};
+  const pcaInfo = data.pca_info || {};
+  const best = data.best_model;
+
+  // Best model banner
+  document.getElementById('bestModelName').textContent = best;
+  document.getElementById('resultsSection').classList.remove('d-none');
+  document.getElementById('toPredictBtn').style.display = '';
+
+  // 1. Supervised Metrics Table
+  const tbody = document.getElementById('metricsTable');
+  tbody.innerHTML = '';
+  const metrics = ['accuracy', 'precision', 'recall', 'f1_score', 'roc_auc'];
+  Object.entries(results).forEach(([name, m]) => {
+    if (m.status === 'error') {
+      tbody.innerHTML += `<tr><td class="text-start ps-3">${name}</td><td colspan="5" class="text-danger">Error: ${m.error}</td></tr>`;
+      return;
+    }
+    const isBest = name === best;
+    tbody.innerHTML += `
+      <tr class="${isBest ? 'table-warning fw-bold' : ''}">
+        <td class="text-start ps-3">
+          ${isBest ? '<i class="fa-solid fa-trophy text-warning me-1"></i>' : ''}
+          ${name}
+        </td>
+        ${metrics.map(k => `<td>${(m[k] * 100).toFixed(2)}%</td>`).join('')}
+      </tr>`;
+  });
+
+  // 2. 5-Fold Cross-Validation Table
+  const cvBody = document.getElementById('cvMetricsTable');
+  cvBody.innerHTML = '';
+  Object.entries(results).forEach(([name, m]) => {
+    if (m.status === 'error' || !m.cross_validation_5fold) return;
+    const cv = m.cross_validation_5fold;
+    if (cv.error) {
+      cvBody.innerHTML += `<tr><td class="text-start ps-3">${name}</td><td colspan="5" class="text-muted">CV Error: ${cv.error}</td></tr>`;
+      return;
+    }
+    const isBest = name === best;
+    cvBody.innerHTML += `
+      <tr class="${isBest ? 'table-warning fw-bold' : ''}">
+        <td class="text-start ps-3">${name}</td>
+        <td>${(cv.accuracy_mean * 100).toFixed(2)}% ± ${(cv.accuracy_std * 100).toFixed(2)}%</td>
+        <td>${(cv.precision_mean * 100).toFixed(2)}% ± ${(cv.precision_std * 100).toFixed(2)}%</td>
+        <td>${(cv.recall_mean * 100).toFixed(2)}% ± ${(cv.recall_std * 100).toFixed(2)}%</td>
+        <td>${(cv.f1_mean * 100).toFixed(2)}% ± ${(cv.f1_std * 100).toFixed(2)}%</td>
+        <td>${(cv.roc_auc_mean * 100).toFixed(2)}% ± ${(cv.roc_auc_std * 100).toFixed(2)}%</td>
+      </tr>`;
+  });
+
+  // 3. Unsupervised Models Cards
+  const unsupContainer = document.getElementById('unsupervisedCards');
+  unsupContainer.innerHTML = '';
+  Object.entries(unsupResults).forEach(([name, res]) => {
+    if (res.status === 'error') return;
+    let cardContent = `<p class="text-muted small">${res.description || ''}</p>`;
+
+    if (name.includes('K-Means')) {
+      cardContent += `
+        <div class="d-flex justify-content-between border-bottom py-1"><span>Silhouette Score:</span><strong class="text-warning">${res.silhouette_score}</strong></div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span>Fraud Alignment:</span><strong class="text-success">${(res.fraud_alignment_accuracy * 100).toFixed(2)}%</strong></div>
+      `;
+    } else if (name.includes('DBSCAN')) {
+      cardContent += `
+        <div class="d-flex justify-content-between border-bottom py-1"><span>Outliers Found:</span><strong class="text-danger">${res.noise_points_outliers}</strong></div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span>Outlier Rate:</span><strong class="text-warning">${res.outlier_percentage}%</strong></div>
+      `;
+    } else if (name.includes('Anomaly')) {
+      cardContent += `
+        <div class="d-flex justify-content-between border-bottom py-1"><span>Detected Anomalies:</span><strong class="text-danger">${res.detected_anomalies}</strong></div>
+        <div class="d-flex justify-content-between border-bottom py-1"><span>Anomaly Rate:</span><strong class="text-warning">${res.anomaly_rate_pct}%</strong></div>
+        ${res.recall_vs_true_fraud !== undefined ? `<div class="d-flex justify-content-between border-bottom py-1"><span>Fraud Recall:</span><strong class="text-success">${(res.recall_vs_true_fraud * 100).toFixed(2)}%</strong></div>` : ''}
+      `;
+    }
+
+    unsupContainer.innerHTML += `
+      <div class="col-md-4">
+        <div class="card border-0 h-100 shadow-sm">
+          <div class="card-header bg-dark fw-bold text-warning"><i class="fa-solid fa-diagram-project me-2"></i>${name}</div>
+          <div class="card-body">${cardContent}</div>
+        </div>
+      </div>`;
+  });
+
+  // 4. PCA Summary & Table
+  if (pcaInfo.total_variance_explained) {
+    document.getElementById('pcaTotalVariance').textContent = pcaInfo.total_variance_explained + '%';
+    document.getElementById('pcaComponentsCount').textContent = 'Principal Components Retained: ' + pcaInfo.n_components;
+
+    const pcaBody = document.getElementById('pcaTableBody');
+    pcaBody.innerHTML = '';
+    (pcaInfo.components_summary || []).forEach(row => {
+      pcaBody.innerHTML += `
+        <tr>
+          <td class="fw-bold text-success">${row.pc}</td>
+          <td>${row.explained_var_pct}%</td>
+          <td>${row.cum_var_pct}%</td>
+          <td class="text-start"><code>${row.top_feature}</code></td>
+        </tr>`;
+    });
+  }
+
+  // Feature Importance & Confusion Matrix plots
+  const fi = data.feature_importance || [];
+  if (fi.length > 0) {
+    const fiData = [{
+      type: 'bar',
+      orientation: 'h',
+      x: fi.map(f => f.importance).reverse(),
+      y: fi.map(f => f.feature).reverse(),
+      marker: { color: '#f39c12' },
+    }];
+    Plotly.newPlot('featureImportancePlot', fiData, {
+      template: 'plotly_dark',
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { color: '#e0e0e0' },
+      margin: { t: 20, b: 30, l: 140, r: 20 },
+      yaxis: { tickfont: { size: 10 } },
+    }, { responsive: true, displaylogo: false });
+  }
+
+  const bestMetrics = results[best];
+  if (bestMetrics && bestMetrics.confusion_matrix) {
+    const cm = bestMetrics.confusion_matrix;
+    const cmData = [{
+      type: 'heatmap',
+      z: cm,
+      x: ['Pred: Legit', 'Pred: Fraud'],
+      y: ['Actual: Legit', 'Actual: Fraud'],
+      colorscale: 'Reds',
+      text: cm.map(row => row.map(v => v.toLocaleString())),
+      texttemplate: '%{text}',
+      showscale: false,
+    }];
+    Plotly.newPlot('confusionMatrix', cmData, {
+      template: 'plotly_dark',
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { color: '#e0e0e0', size: 14 },
+      margin: { t: 20, b: 60, l: 120, r: 20 },
+    }, { responsive: true, displaylogo: false });
+  }
+
+  showToast('Training & ML analysis complete! Best model: ' + best, 'success');
+}
+</script>
+{% endblock %}
